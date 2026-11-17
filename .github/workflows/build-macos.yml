@@ -71,8 +71,8 @@ jobs:
           cat > "$ASKPASS" <<'ASKPASS_EOF'
           #!/bin/sh
           case "$1" in
-            *Username*) printf '%s\\n' "$OPENLP_GITLAB_USERNAME" ;;
-            *Password*) printf '%s\\n' "$OPENLP_GITLAB_TOKEN" ;;
+            *Username*) printf '%s\n' "$OPENLP_GITLAB_USERNAME" ;;
+            *Password*) printf '%s\n' "$OPENLP_GITLAB_TOKEN" ;;
             *) exit 1 ;;
           esac
           ASKPASS_EOF
@@ -116,8 +116,8 @@ jobs:
 
           path = Path(sys.argv[1])
           source = path.read_text()
-          broken = "cmd = ['pyinstaller'\\n"
-          fixed = "cmd = ['pyinstaller',\\n"
+          broken = "cmd = ['pyinstaller'\n"
+          fixed = "cmd = ['pyinstaller',\n"
           if fixed in source:
               print("PyInstaller command comma fix is already present.")
           elif broken in source:
