@@ -127,9 +127,10 @@ jobs:
               raise SystemExit("Expected PyInstaller command was not found; refusing an unsafe patch.")
           PY
 
-          # The builder installs Pyro5 during main(). Preload QtCore now,
-          # before pip installs its import-protection hook, because the
-          # translation step imports PyQt5.QtCore later in the same process.
+          # The builder installs Pyro5 during main(). Preload modules that it
+          # invokes later through runpy before pip installs its import-protection
+          # hook. QtCore is needed for translations; dmgbuild is needed to
+          # create the DMG.
           python3 - "$PACKAGING_DIR/builders/macos-builder.py" <<'PY'
           from pathlib import Path
           import sys
@@ -137,14 +138,16 @@ jobs:
           path = Path(sys.argv[1])
           source = path.read_text()
           marker = "from pathlib import Path\n"
-          preload = marker + "from PyQt5.QtCore import QCoreApplication  # Preload before pip installs its import hook.\n"
-          if preload in source:
-              print("QtCore preload is already present.")
-          elif marker in source:
-              path.write_text(source.replace(marker, preload, 1))
-              print("Applied temporary PyQt5.QtCore preload in the runner checkout.")
-          else:
+          qt_import = "from PyQt5.QtCore import QCoreApplication  # Preload before pip installs its import hook.\n"
+          dmg_import = "import dmgbuild  # Preload before pip installs its import hook.\n"
+          if marker not in source:
               raise SystemExit("Expected macOS builder import block was not found; refusing an unsafe patch.")
+          if qt_import not in source:
+              source = source.replace(marker, marker + qt_import, 1)
+          if dmg_import not in source:
+              source = source.replace(qt_import, qt_import + dmg_import, 1)
+          path.write_text(source)
+          print("Ensured PyQt5.QtCore and dmgbuild are preloaded before pip installs its import hook.")
           PY
 
           echo "PACKAGING_DIR=$PACKAGING_DIR" >> "$GITHUB_ENV"
