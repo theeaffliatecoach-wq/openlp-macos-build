@@ -136,8 +136,8 @@ jobs:
 
           path = Path(sys.argv[1])
           source = path.read_text()
-          marker = "from pathlib import Path\\n"
-          preload = marker + "from PyQt5.QtCore import QCoreApplication  # Preload before pip installs its import hook.\\n"
+          marker = "from pathlib import Path\n"
+          preload = marker + "from PyQt5.QtCore import QCoreApplication  # Preload before pip installs its import hook.\n"
           if preload in source:
               print("QtCore preload is already present.")
           elif marker in source:
