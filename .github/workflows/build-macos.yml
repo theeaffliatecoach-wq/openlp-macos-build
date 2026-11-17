@@ -170,11 +170,18 @@ jobs:
         run: |
           set -euo pipefail
           cd "$PACKAGING_DIR"
+          set +e
           python builders/macos-builder.py \
             --use-qt5 \
             --skip-update \
             --config macos/config-gitlab.ini \
-            --branch "$OPENLP_DIR"
+            --branch "$OPENLP_DIR" 2>&1 | tee "$RUNNER_TEMP/macos-builder.log"
+          BUILD_STATUS=${PIPESTATUS[0]}
+          set -e
+          if (( BUILD_STATUS != 0 )); then
+            echo "::error::macOS packaging builder exited with status $BUILD_STATUS."
+            exit "$BUILD_STATUS"
+          fi
 
           echo "=== Packaging output ==="
           find dist -maxdepth 3 \( -name '*.dmg' -o -name '*.app' \) -print
@@ -257,7 +264,9 @@ jobs:
         with:
           name: openlp-macos-${{ matrix.expected_arch }}-build-failure
           path: |
-            ${{ runner.temp }}/openlp-source
-            ${{ runner.temp }}/openlp-packaging
+            ${{ runner.temp }}/macos-builder.log
+            ${{ runner.temp }}/openlp-packaging/builders/builder.py
+            ${{ runner.temp }}/openlp-packaging/builders/macos-builder.py
+            ${{ runner.temp }}/openlp-packaging/macos/config-gitlab.ini
           if-no-files-found: ignore
           retention-days: 7
