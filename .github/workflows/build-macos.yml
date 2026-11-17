@@ -71,8 +71,8 @@ jobs:
           cat > "$ASKPASS" <<'ASKPASS_EOF'
           #!/bin/sh
           case "$1" in
-            *Username*) printf '%s\n' "$OPENLP_GITLAB_USERNAME" ;;
-            *Password*) printf '%s\n' "$OPENLP_GITLAB_TOKEN" ;;
+            *Username*) printf '%s\\n' "$OPENLP_GITLAB_USERNAME" ;;
+            *Password*) printf '%s\\n' "$OPENLP_GITLAB_TOKEN" ;;
             *) exit 1 ;;
           esac
           ASKPASS_EOF
@@ -85,9 +85,16 @@ jobs:
           git -C "$OPENLP_DIR" remote add origin "$OPENLP_REPOSITORY"
           git -C "$OPENLP_DIR" fetch --no-tags --depth=1 origin "$OPENLP_COMMIT"
           git -C "$OPENLP_DIR" checkout --detach FETCH_HEAD
+
+          # The packaging builder calls git describe --tags to generate its
+          # version file. A depth-1, no-tags checkout cannot resolve that.
+          # Fetch tags and the pinned commit's complete ancestry while the
+          # temporary GitLab askpass credentials are still available.
+          git -C "$OPENLP_DIR" fetch --unshallow --tags origin "$OPENLP_COMMIT"
           ACTUAL="$(git -C "$OPENLP_DIR" rev-parse HEAD)"
           test "$ACTUAL" = "$OPENLP_COMMIT"
           echo "OpenLP source: $ACTUAL"
+          echo "OpenLP version: $(git -C "$OPENLP_DIR" describe --tags)"
           echo "OPENLP_DIR=$OPENLP_DIR" >> "$GITHUB_ENV"
           rm -f "$ASKPASS"
 
@@ -109,8 +116,8 @@ jobs:
 
           path = Path(sys.argv[1])
           source = path.read_text()
-          broken = "cmd = ['pyinstaller'\n"
-          fixed = "cmd = ['pyinstaller',\n"
+          broken = "cmd = ['pyinstaller'\\n"
+          fixed = "cmd = ['pyinstaller',\\n"
           if fixed in source:
               print("PyInstaller command comma fix is already present.")
           elif broken in source:
@@ -144,11 +151,11 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          python -m pip install \
-            alembic beautifulsoup4 chardet flask flask-cors lxml Mako mock \
-            mysql-connector-python packaging platformdirs psycopg2-binary \
-            pyenchant pymediainfo PyMuPDF PyQt5 PyQtWebEngine PySide6 \
-            pysword pytest pytest-qt 'python-vlc==3.0.18122' QDarkStyle \
+          python -m pip install \\
+            alembic beautifulsoup4 chardet flask flask-cors lxml Mako mock \\
+            mysql-connector-python packaging platformdirs psycopg2-binary \\
+            pyenchant pymediainfo PyMuPDF PyQt5 PyQtWebEngine PySide6 \\
+            pysword pytest pytest-qt 'python-vlc==3.0.18122' QDarkStyle \\
             qrcode QtAwesome requests six sqlalchemy waitress websockets
           python -m pip install py-applescript pyobjc-core pyobjc-framework-Cocoa Pyro5
           export PKG_CONFIG_PATH="$ICU_PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
@@ -171,10 +178,10 @@ jobs:
           set -euo pipefail
           cd "$PACKAGING_DIR"
           set +e
-          python builders/macos-builder.py \
-            --use-qt5 \
-            --skip-update \
-            --config macos/config-gitlab.ini \
+          python builders/macos-builder.py \\
+            --use-qt5 \\
+            --skip-update \\
+            --config macos/config-gitlab.ini \\
             --branch "$OPENLP_DIR" 2>&1 | tee "$RUNNER_TEMP/macos-builder.log"
           BUILD_STATUS=${PIPESTATUS[0]}
           set -e
@@ -184,7 +191,7 @@ jobs:
           fi
 
           echo "=== Packaging output ==="
-          find dist -maxdepth 3 \( -name '*.dmg' -o -name '*.app' \) -print
+          find dist -maxdepth 3 \\( -name '*.dmg' -o -name '*.app' \\) -print
           compgen -G 'dist/*.dmg' >/dev/null || {
             echo "::error::The macOS builder did not produce a DMG in dist/."
             exit 1
