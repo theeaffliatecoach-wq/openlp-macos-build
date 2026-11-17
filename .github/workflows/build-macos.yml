@@ -1,0 +1,263 @@
+name: Build unsigned macOS packages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-package-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build \${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Intel x86_64
+            runner: macos-15-intel
+            expected_arch: x86_64
+          - name: Apple Silicon arm64
+            runner: macos-15
+            expected_arch: arm64
+
+    runs-on: \${{ matrix.runner }}
+    timeout-minutes: 120
+
+    env:
+      OPENLP_REPOSITORY: https://gitlab.com/gideon-njoroge-group/openlp.git
+      OPENLP_COMMIT: 0a5cda2435521cd085d9015a66e247160a1439d5
+      PACKAGING_REPOSITORY: https://gitlab.com/openlp/packaging.git
+      PACKAGING_COMMIT: d766d0c4e44b620b1bf59c3b02cc6e4af8953e2f
+      QT_QPA_PLATFORM: offscreen
+      HOMEBREW_NO_AUTO_UPDATE: "TRUE"
+      HOMEBREW_NO_INSTALL_CLEANUP: "TRUE"
+      HOMEBREW_NO_ENV_HINTS: "TRUE"
+      PYTHON_VERSION: "3.13.2"
+
+    steps:
+      - name: Verify runner architecture
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Runner: \${{ matrix.name }}"
+          sw_vers
+          uname -a
+          ACTUAL_ARCH="$(uname -m)"
+          echo "Expected: \${{ matrix.expected_arch }}"
+          echo "Actual:   $ACTUAL_ARCH"
+          test "$ACTUAL_ARCH" = "\${{ matrix.expected_arch }}"
+          xcode-select -p
+          git --version
+          df -h /
+
+      - name: Fetch pinned OpenLP source
+        shell: bash
+        env:
+          OPENLP_GITLAB_USERNAME: \${{ secrets.OPENLP_GITLAB_USERNAME }}
+          OPENLP_GITLAB_TOKEN: \${{ secrets.OPENLP_GITLAB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "\${OPENLP_GITLAB_USERNAME:-}" || -z "\${OPENLP_GITLAB_TOKEN:-}" ]]; then
+            echo "::error::Missing OPENLP_GITLAB_USERNAME or OPENLP_GITLAB_TOKEN Actions secret."
+            exit 1
+          fi
+
+          ASKPASS="$RUNNER_TEMP/gitlab-askpass.sh"
+          cat > "$ASKPASS" <<'ASKPASS_EOF'
+          #!/bin/sh
+          case "$1" in
+            *Username*) printf '%s\n' "$OPENLP_GITLAB_USERNAME" ;;
+            *Password*) printf '%s\n' "$OPENLP_GITLAB_TOKEN" ;;
+            *) exit 1 ;;
+          esac
+          ASKPASS_EOF
+          chmod 700 "$ASKPASS"
+          export GIT_ASKPASS="$ASKPASS"
+          export GIT_TERMINAL_PROMPT=0
+
+          OPENLP_DIR="$RUNNER_TEMP/openlp-source"
+          git init --initial-branch=main "$OPENLP_DIR"
+          git -C "$OPENLP_DIR" remote add origin "$OPENLP_REPOSITORY"
+          git -C "$OPENLP_DIR" fetch --no-tags --depth=1 origin "$OPENLP_COMMIT"
+          git -C "$OPENLP_DIR" checkout --detach FETCH_HEAD
+          ACTUAL="$(git -C "$OPENLP_DIR" rev-parse HEAD)"
+          test "$ACTUAL" = "$OPENLP_COMMIT"
+          echo "OpenLP source: $ACTUAL"
+          echo "OPENLP_DIR=$OPENLP_DIR" >> "$GITHUB_ENV"
+          rm -f "$ASKPASS"
+
+      - name: Fetch pinned packaging source and apply temporary PyInstaller fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACKAGING_DIR="$RUNNER_TEMP/openlp-packaging"
+          git init --initial-branch=main "$PACKAGING_DIR"
+          git -C "$PACKAGING_DIR" remote add origin "$PACKAGING_REPOSITORY"
+          git -C "$PACKAGING_DIR" fetch --no-tags --depth=1 origin "$PACKAGING_COMMIT"
+          git -C "$PACKAGING_DIR" checkout --detach FETCH_HEAD
+          ACTUAL="$(git -C "$PACKAGING_DIR" rev-parse HEAD)"
+          test "$ACTUAL" = "$PACKAGING_COMMIT"
+
+          python3 - "$PACKAGING_DIR/builders/builder.py" <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path(sys.argv[1])
+          source = path.read_text()
+          broken = "cmd = ['pyinstaller'\n"
+          fixed = "cmd = ['pyinstaller',\n"
+          if fixed in source:
+              print("PyInstaller command comma fix is already present.")
+          elif broken in source:
+              path.write_text(source.replace(broken, fixed, 1))
+              print("Applied temporary missing-comma fix in the runner checkout.")
+          else:
+              raise SystemExit("Expected PyInstaller command was not found; refusing an unsafe patch.")
+          PY
+
+          echo "PACKAGING_DIR=$PACKAGING_DIR" >> "$GITHUB_ENV"
+          echo "Packaging source: $ACTUAL"
+          grep -n -A 3 -B 1 "cmd = \\['pyinstaller'" "$PACKAGING_DIR/builders/builder.py"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: \${{ env.PYTHON_VERSION }}
+          architecture: \${{ matrix.expected_arch }}
+          cache: pip
+
+      - name: Install macOS system dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install pkg-config icu4c libmediainfo enchant
+          echo "ICU_PREFIX=$(brew --prefix icu4c)" >> "$GITHUB_ENV"
+          echo "MEDIAINFO_PREFIX=$(brew --prefix libmediainfo)" >> "$GITHUB_ENV"
+          echo "ENCHANT_PREFIX=$(brew --prefix enchant)" >> "$GITHUB_ENV"
+
+      - name: Install OpenLP and packaging dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install \
+            alembic beautifulsoup4 chardet flask flask-cors lxml Mako mock \
+            mysql-connector-python packaging platformdirs psycopg2-binary \
+            pyenchant pymediainfo PyMuPDF PyQt5 PyQtWebEngine PySide6 \
+            pysword pytest pytest-qt 'python-vlc==3.0.18122' QDarkStyle \
+            qrcode QtAwesome requests six sqlalchemy waitress websockets
+          python -m pip install py-applescript pyobjc-core pyobjc-framework-Cocoa Pyro5
+          export PKG_CONFIG_PATH="$ICU_PREFIX/lib/pkgconfig:\${PKG_CONFIG_PATH:-}"
+          python -m pip install pyicu
+          python -m pip install dmgbuild macholib pyinstaller
+
+          SITE_PACKAGES="$(python -c 'import site; print(site.getsitepackages()[0])')"
+          MEDIAINFO_PACKAGE="$SITE_PACKAGES/pymediainfo"
+          test -d "$MEDIAINFO_PACKAGE"
+          cp -f "$MEDIAINFO_PREFIX/lib/libmediainfo.dylib" "$MEDIAINFO_PACKAGE/libmediainfo.dylib"
+          ln -sf libmediainfo.dylib "$MEDIAINFO_PACKAGE/libmediainfo.0.dylib"
+
+          echo "PYENCHANT_LIBRARY_PATH=$ENCHANT_PREFIX/lib/libenchant-2.2.dylib" >> "$GITHUB_ENV"
+          echo "Installed Python: $(python --version)"
+          python -m pip check
+
+      - name: Build OpenLP app and DMG
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PACKAGING_DIR"
+          python builders/macos-builder.py \
+            --use-qt5 \
+            --skip-update \
+            --config macos/config-gitlab.ini \
+            --branch "$OPENLP_DIR"
+
+          echo "=== Packaging output ==="
+          find dist -maxdepth 3 \( -name '*.dmg' -o -name '*.app' \) -print
+          compgen -G 'dist/*.dmg' >/dev/null || {
+            echo "::error::The macOS builder did not produce a DMG in dist/."
+            exit 1
+          }
+
+      - name: Validate app bundle and DMG architecture
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PACKAGING_DIR"
+          mkdir -p "$RUNNER_TEMP/package-validation"
+
+          shopt -s nullglob
+          DMGS=(dist/*.dmg)
+          APPS=(dist/*.app)
+          if (( \${#DMGS[@]} == 0 )); then
+            echo "::error::No DMG artifacts found."
+            exit 1
+          fi
+
+          for dmg in "\${DMGS[@]}"; do
+            echo "Verifying $dmg"
+            hdiutil verify "$dmg"
+            file "$dmg"
+          done
+
+          if (( \${#APPS[@]} == 0 )); then
+            echo "::error::No .app bundle found in dist/."
+            exit 1
+          fi
+
+          for app in "\${APPS[@]}"; do
+            EXECUTABLE="$app/Contents/MacOS/OpenLP"
+            if [[ ! -f "$EXECUTABLE" ]]; then
+              EXECUTABLE="$(find "$app/Contents/MacOS" -maxdepth 1 -type f | head -n 1)"
+            fi
+            test -n "$EXECUTABLE"
+            ARCHS="$(lipo -archs "$EXECUTABLE")"
+            echo "$app executable architectures: $ARCHS"
+            [[ " $ARCHS " == *" \${{ matrix.expected_arch }} "* ]] || {
+              echo "::error::App executable does not contain expected architecture \${{ matrix.expected_arch }}."
+              exit 1
+            }
+            ditto -c -k --sequesterRsrc --keepParent "$app" "$RUNNER_TEMP/package-validation/$(basename "$app").zip"
+          done
+
+          cp "\${DMGS[@]}" "$RUNNER_TEMP/package-validation/"
+          {
+            echo "## Unsigned macOS package build"
+            echo
+            echo "- Runner: \${{ matrix.name }}"
+            echo "- Architecture: \${{ matrix.expected_arch }}"
+            echo "- OpenLP commit: $OPENLP_COMMIT"
+            echo "- Packaging commit: $PACKAGING_COMMIT"
+            echo "- Python: $(python --version)"
+            echo "- Signing: not configured (unsigned distribution)"
+            echo
+            echo "### Artifacts"
+            for item in "$RUNNER_TEMP/package-validation/"*; do
+              [[ -f "$item" ]] || continue
+              echo "- $(basename "$item") — $(du -h "$item" | awk '{print $1}')"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload unsigned macOS packages
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openlp-macos-\${{ matrix.expected_arch }}-unsigned
+          path: \${{ runner.temp }}/package-validation/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload build diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openlp-macos-\${{ matrix.expected_arch }}-build-failure
+          path: |
+            \${{ runner.temp }}/openlp-source
+            \${{ runner.temp }}/openlp-packaging
+          if-no-files-found: ignore
+          retention-days: 7
