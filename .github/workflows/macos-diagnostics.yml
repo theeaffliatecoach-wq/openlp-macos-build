@@ -1,0 +1,136 @@
+name: macOS runner diagnostics
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-diagnostics-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    name: Diagnose ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Intel x86_64
+            runner: macos-15-intel
+            expected_arch: x86_64
+          - name: Apple Silicon arm64
+            runner: macos-15
+            expected_arch: arm64
+
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+
+    env:
+      OPENLP_REPOSITORY: https://gitlab.com/gideon-njoroge-group/openlp.git
+      OPENLP_COMMIT: 0a5cda2435521cd085d9015a66e247160a1439d5
+      PACKAGING_REPOSITORY: https://gitlab.com/openlp/packaging.git
+      PACKAGING_COMMIT: d766d0c4e44b620b1bf59c3b02cc6e4af8953e2f
+
+    steps:
+      - name: Inspect runner environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostics
+
+          {
+            echo "=== Runner identity ==="
+            echo "Runner name: ${{ runner.name }}"
+            echo "Runner OS: ${{ runner.os }}"
+            echo "Runner architecture: ${{ runner.arch }}"
+            echo
+            echo "=== macOS ==="
+            sw_vers
+            echo
+            echo "=== CPU architecture ==="
+            uname -a
+            uname -m
+            arch
+            echo
+            echo "=== Developer tools ==="
+            xcode-select -p
+            xcodebuild -version
+            echo
+            echo "=== Toolchain ==="
+            git --version
+            python3 --version
+            command -v python3
+            echo
+            echo "=== Disk space ==="
+            df -h /
+          } 2>&1 | tee diagnostics/runner.txt
+
+          ACTUAL_ARCH="$(uname -m)"
+          if [[ "$ACTUAL_ARCH" != "${{ matrix.expected_arch }}" ]]; then
+            echo "::error::Expected ${{ matrix.expected_arch }}, got $ACTUAL_ARCH"
+            exit 1
+          fi
+
+      - name: Verify pinned OpenLP source commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostics/source
+          WORKTREE="$RUNNER_TEMP/openlp-source-diagnostic"
+          git init "$WORKTREE"
+          git -C "$WORKTREE" remote add origin "$OPENLP_REPOSITORY"
+          git -C "$WORKTREE" fetch --no-tags --depth=1 origin "$OPENLP_COMMIT"
+          git -C "$WORKTREE" checkout --detach FETCH_HEAD
+
+          ACTUAL="$(git -C "$WORKTREE" rev-parse HEAD)"
+          echo "Expected OpenLP commit: $OPENLP_COMMIT" | tee diagnostics/openlp-source.txt
+          echo "Fetched OpenLP commit:  $ACTUAL" | tee -a diagnostics/openlp-source.txt
+          test "$ACTUAL" = "$OPENLP_COMMIT"
+
+      - name: Verify pinned packaging commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          WORKTREE="$RUNNER_TEMP/openlp-packaging-diagnostic"
+          git init "$WORKTREE"
+          git -C "$WORKTREE" remote add origin "$PACKAGING_REPOSITORY"
+          git -C "$WORKTREE" fetch --no-tags --depth=1 origin "$PACKAGING_COMMIT"
+          git -C "$WORKTREE" checkout --detach FETCH_HEAD
+
+          ACTUAL="$(git -C "$WORKTREE" rev-parse HEAD)"
+          echo "Expected packaging commit: $PACKAGING_COMMIT" | tee diagnostics/packaging-source.txt
+          echo "Fetched packaging commit:  $ACTUAL" | tee -a diagnostics/packaging-source.txt
+          test "$ACTUAL" = "$PACKAGING_COMMIT"
+
+          echo
+          echo "=== PyInstaller command source ===" | tee -a diagnostics/packaging-source.txt
+          grep -n -A 4 -B 2 "cmd = \['pyinstaller'" "$WORKTREE/builders/builder.py" | tee -a diagnostics/packaging-source.txt
+
+      - name: Write job summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## macOS runner diagnostic"
+            echo
+            echo "- Runner: ${{ matrix.name }}"
+            echo "- Expected architecture: ${{ matrix.expected_arch }}"
+            echo "- OpenLP commit: `$OPENLP_COMMIT`"
+            echo "- Packaging commit: `$PACKAGING_COMMIT`"
+            echo
+            echo "See the uploaded diagnostic artifact for full environment and source-fetch details."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-diagnostics-${{ matrix.expected_arch }}
+          path: diagnostics/
+          if-no-files-found: warn
+          retention-days: 14
