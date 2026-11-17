@@ -133,7 +133,6 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           architecture: ${{ matrix.python_arch }}
-          cache: pip
 
       - name: Install macOS system dependencies
         shell: bash
