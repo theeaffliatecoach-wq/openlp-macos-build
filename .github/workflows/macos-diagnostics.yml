@@ -117,11 +117,6 @@ jobs:
           test "$ACTUAL" = "$OPENLP_COMMIT"
           rm -f "$ASKPASS"
 
-          ACTUAL="$(git -C "$WORKTREE" rev-parse HEAD)"
-          echo "Expected OpenLP commit: $OPENLP_COMMIT" | tee diagnostics/openlp-source.txt
-          echo "Fetched OpenLP commit:  $ACTUAL" | tee -a diagnostics/openlp-source.txt
-          test "$ACTUAL" = "$OPENLP_COMMIT"
-
       - name: Verify pinned packaging commit
         shell: bash
         run: |
@@ -150,8 +145,8 @@ jobs:
             echo
             echo "- Runner: ${{ matrix.name }}"
             echo "- Expected architecture: ${{ matrix.expected_arch }}"
-            echo "- OpenLP commit: `$OPENLP_COMMIT`"
-            echo "- Packaging commit: `$PACKAGING_COMMIT`"
+            echo "- OpenLP commit: $OPENLP_COMMIT"
+            echo "- Packaging commit: $PACKAGING_COMMIT"
             echo
             echo "See the uploaded diagnostic artifact for full environment and source-fetch details."
           } >> "$GITHUB_STEP_SUMMARY"
