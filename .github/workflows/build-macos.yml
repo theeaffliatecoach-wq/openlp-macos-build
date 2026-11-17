@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build \${{ matrix.name }}
+    name: Build ${{ matrix.name }}
     strategy:
       fail-fast: false
       matrix:
@@ -29,7 +29,7 @@ jobs:
             expected_arch: arm64
             python_arch: arm64
 
-    runs-on: \${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
 
     env:
@@ -48,13 +48,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "Runner: \${{ matrix.name }}"
+          echo "Runner: ${{ matrix.name }}"
           sw_vers
           uname -a
           ACTUAL_ARCH="$(uname -m)"
-          echo "Expected: \${{ matrix.expected_arch }}"
+          echo "Expected: ${{ matrix.expected_arch }}"
           echo "Actual:   $ACTUAL_ARCH"
-          test "$ACTUAL_ARCH" = "\${{ matrix.expected_arch }}"
+          test "$ACTUAL_ARCH" = "${{ matrix.expected_arch }}"
           xcode-select -p
           git --version
           df -h /
@@ -62,11 +62,11 @@ jobs:
       - name: Fetch pinned OpenLP source
         shell: bash
         env:
-          OPENLP_GITLAB_USERNAME: \${{ secrets.OPENLP_GITLAB_USERNAME }}
-          OPENLP_GITLAB_TOKEN: \${{ secrets.OPENLP_GITLAB_TOKEN }}
+          OPENLP_GITLAB_USERNAME: ${{ secrets.OPENLP_GITLAB_USERNAME }}
+          OPENLP_GITLAB_TOKEN: ${{ secrets.OPENLP_GITLAB_TOKEN }}
         run: |
           set -euo pipefail
-          if [[ -z "\${OPENLP_GITLAB_USERNAME:-}" || -z "\${OPENLP_GITLAB_TOKEN:-}" ]]; then
+          if [[ -z "${OPENLP_GITLAB_USERNAME:-}" || -z "${OPENLP_GITLAB_TOKEN:-}" ]]; then
             echo "::error::Missing OPENLP_GITLAB_USERNAME or OPENLP_GITLAB_TOKEN Actions secret."
             exit 1
           fi
@@ -131,8 +131,8 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: \${{ env.PYTHON_VERSION }}
-          architecture: \${{ matrix.expected_arch }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          architecture: ${{ matrix.python_arch }}
           cache: pip
 
       - name: Install macOS system dependencies
@@ -156,7 +156,7 @@ jobs:
             pysword pytest pytest-qt 'python-vlc==3.0.18122' QDarkStyle \
             qrcode QtAwesome requests six sqlalchemy waitress websockets
           python -m pip install py-applescript pyobjc-core pyobjc-framework-Cocoa Pyro5
-          export PKG_CONFIG_PATH="$ICU_PREFIX/lib/pkgconfig:\${PKG_CONFIG_PATH:-}"
+          export PKG_CONFIG_PATH="$ICU_PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
           python -m pip install pyicu
           python -m pip install dmgbuild macholib pyinstaller
 
@@ -198,23 +198,23 @@ jobs:
           shopt -s nullglob
           DMGS=(dist/*.dmg)
           APPS=(dist/*.app)
-          if (( \${#DMGS[@]} == 0 )); then
+          if (( ${#DMGS[@]} == 0 )); then
             echo "::error::No DMG artifacts found."
             exit 1
           fi
 
-          for dmg in "\${DMGS[@]}"; do
+          for dmg in "${DMGS[@]}"; do
             echo "Verifying $dmg"
             hdiutil verify "$dmg"
             file "$dmg"
           done
 
-          if (( \${#APPS[@]} == 0 )); then
+          if (( ${#APPS[@]} == 0 )); then
             echo "::error::No .app bundle found in dist/."
             exit 1
           fi
 
-          for app in "\${APPS[@]}"; do
+          for app in "${APPS[@]}"; do
             EXECUTABLE="$app/Contents/MacOS/OpenLP"
             if [[ ! -f "$EXECUTABLE" ]]; then
               EXECUTABLE="$(find "$app/Contents/MacOS" -maxdepth 1 -type f | head -n 1)"
@@ -222,19 +222,19 @@ jobs:
             test -n "$EXECUTABLE"
             ARCHS="$(lipo -archs "$EXECUTABLE")"
             echo "$app executable architectures: $ARCHS"
-            [[ " $ARCHS " == *" \${{ matrix.expected_arch }} "* ]] || {
-              echo "::error::App executable does not contain expected architecture \${{ matrix.expected_arch }}."
+            [[ " $ARCHS " == *" ${{ matrix.expected_arch }} "* ]] || {
+              echo "::error::App executable does not contain expected architecture ${{ matrix.expected_arch }}."
               exit 1
             }
             ditto -c -k --sequesterRsrc --keepParent "$app" "$RUNNER_TEMP/package-validation/$(basename "$app").zip"
           done
 
-          cp "\${DMGS[@]}" "$RUNNER_TEMP/package-validation/"
+          cp "${DMGS[@]}" "$RUNNER_TEMP/package-validation/"
           {
             echo "## Unsigned macOS package build"
             echo
-            echo "- Runner: \${{ matrix.name }}"
-            echo "- Architecture: \${{ matrix.expected_arch }}"
+            echo "- Runner: ${{ matrix.name }}"
+            echo "- Architecture: ${{ matrix.expected_arch }}"
             echo "- OpenLP commit: $OPENLP_COMMIT"
             echo "- Packaging commit: $PACKAGING_COMMIT"
             echo "- Python: $(python --version)"
@@ -251,8 +251,8 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: openlp-macos-\${{ matrix.expected_arch }}-unsigned
-          path: \${{ runner.temp }}/package-validation/*
+          name: openlp-macos-${{ matrix.expected_arch }}-unsigned
+          path: ${{ runner.temp }}/package-validation/*
           if-no-files-found: error
           retention-days: 30
 
@@ -260,9 +260,9 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: openlp-macos-\${{ matrix.expected_arch }}-build-failure
+          name: openlp-macos-${{ matrix.expected_arch }}-build-failure
           path: |
-            \${{ runner.temp }}/openlp-source
-            \${{ runner.temp }}/openlp-packaging
+            ${{ runner.temp }}/openlp-source
+            ${{ runner.temp }}/openlp-packaging
           if-no-files-found: ignore
           retention-days: 7
