@@ -127,6 +127,26 @@ jobs:
               raise SystemExit("Expected PyInstaller command was not found; refusing an unsafe patch.")
           PY
 
+          # The builder installs Pyro5 during main(). Preload QtCore now,
+          # before pip installs its import-protection hook, because the
+          # translation step imports PyQt5.QtCore later in the same process.
+          python3 - "$PACKAGING_DIR/builders/macos-builder.py" <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path(sys.argv[1])
+          source = path.read_text()
+          marker = "from pathlib import Path\\n"
+          preload = marker + "from PyQt5.QtCore import QCoreApplication  # Preload before pip installs its import hook.\\n"
+          if preload in source:
+              print("QtCore preload is already present.")
+          elif marker in source:
+              path.write_text(source.replace(marker, preload, 1))
+              print("Applied temporary PyQt5.QtCore preload in the runner checkout.")
+          else:
+              raise SystemExit("Expected macOS builder import block was not found; refusing an unsafe patch.")
+          PY
+
           echo "PACKAGING_DIR=$PACKAGING_DIR" >> "$GITHUB_ENV"
           echo "Packaging source: $ACTUAL"
           grep -n -A 3 -B 1 "cmd = \['pyinstaller'" "$PACKAGING_DIR/builders/builder.py"
