@@ -9,10 +9,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: macos-package-build
-  cancel-in-progress: false
-
 jobs:
   build:
     name: Build ${{ matrix.name }}
