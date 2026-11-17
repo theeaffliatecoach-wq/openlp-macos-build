@@ -78,14 +78,44 @@ jobs:
 
       - name: Verify pinned OpenLP source commit
         shell: bash
+        env:
+          OPENLP_GITLAB_USERNAME: ${{ secrets.OPENLP_GITLAB_USERNAME }}
+          OPENLP_GITLAB_TOKEN: ${{ secrets.OPENLP_GITLAB_TOKEN }}
         run: |
           set -euo pipefail
           mkdir -p diagnostics/source
+
+          if [[ -z "${OPENLP_GITLAB_USERNAME:-}" || -z "${OPENLP_GITLAB_TOKEN:-}" ]]; then
+            echo "::error::Configure OPENLP_GITLAB_USERNAME and OPENLP_GITLAB_TOKEN in repository Actions secrets."
+            exit 1
+          fi
+
+          # Git invokes this helper for credentials. Secrets are never printed or
+          # written to the repository/worktree.
+          ASKPASS="$RUNNER_TEMP/gitlab-askpass.sh"
+          cat > "$ASKPASS" <<'ASKPASS_EOF'
+          #!/bin/sh
+          case "$1" in
+            *Username*) printf '%s\\n' "$OPENLP_GITLAB_USERNAME" ;;
+            *Password*) printf '%s\\n' "$OPENLP_GITLAB_TOKEN" ;;
+            *) exit 1 ;;
+          esac
+          ASKPASS_EOF
+          chmod 700 "$ASKPASS"
+          export GIT_ASKPASS="$ASKPASS"
+          export GIT_TERMINAL_PROMPT=0
+
           WORKTREE="$RUNNER_TEMP/openlp-source-diagnostic"
-          git init "$WORKTREE"
+          git init --initial-branch=main "$WORKTREE"
           git -C "$WORKTREE" remote add origin "$OPENLP_REPOSITORY"
           git -C "$WORKTREE" fetch --no-tags --depth=1 origin "$OPENLP_COMMIT"
           git -C "$WORKTREE" checkout --detach FETCH_HEAD
+
+          ACTUAL="$(git -C "$WORKTREE" rev-parse HEAD)"
+          echo "Expected OpenLP commit: $OPENLP_COMMIT" | tee diagnostics/openlp-source.txt
+          echo "Fetched OpenLP commit:  $ACTUAL" | tee -a diagnostics/openlp-source.txt
+          test "$ACTUAL" = "$OPENLP_COMMIT"
+          rm -f "$ASKPASS"
 
           ACTUAL="$(git -C "$WORKTREE" rev-parse HEAD)"
           echo "Expected OpenLP commit: $OPENLP_COMMIT" | tee diagnostics/openlp-source.txt
