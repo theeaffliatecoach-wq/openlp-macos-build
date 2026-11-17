@@ -129,8 +129,8 @@ jobs:
 
           # The builder installs Pyro5 during main(). Preload modules that it
           # invokes later through runpy before pip installs its import-protection
-          # hook. QtCore is needed for translations; dmgbuild is needed to
-          # create the DMG.
+          # hook. QtCore is needed for translations; dmgbuild.__main__ is
+          # executed by runpy when creating the DMG.
           python3 - "$PACKAGING_DIR/builders/macos-builder.py" <<'PY'
           from pathlib import Path
           import sys
@@ -140,14 +140,17 @@ jobs:
           marker = "from pathlib import Path\n"
           qt_import = "from PyQt5.QtCore import QCoreApplication  # Preload before pip installs its import hook.\n"
           dmg_import = "import dmgbuild  # Preload before pip installs its import hook.\n"
+          dmg_main_import = "import dmgbuild.__main__  # Preload the runpy entry point before pip installs its import hook.\n"
           if marker not in source:
               raise SystemExit("Expected macOS builder import block was not found; refusing an unsafe patch.")
           if qt_import not in source:
               source = source.replace(marker, marker + qt_import, 1)
           if dmg_import not in source:
               source = source.replace(qt_import, qt_import + dmg_import, 1)
+          if dmg_main_import not in source:
+              source = source.replace(dmg_import, dmg_import + dmg_main_import, 1)
           path.write_text(source)
-          print("Ensured PyQt5.QtCore and dmgbuild are preloaded before pip installs its import hook.")
+          print("Ensured PyQt5.QtCore, dmgbuild, and dmgbuild.__main__ are preloaded before pip installs its import hook.")
           PY
 
           echo "PACKAGING_DIR=$PACKAGING_DIR" >> "$GITHUB_ENV"
@@ -159,6 +162,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           architecture: ${{ matrix.python_arch }}
+          cache: pip
+          # Cache pip downloads and locally built wheels (notably PyICU).
+          cache-dependency-path: .github/workflows/build-macos.yml
 
       - name: Install macOS system dependencies
         shell: bash
