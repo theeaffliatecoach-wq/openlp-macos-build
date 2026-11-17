@@ -96,8 +96,8 @@ jobs:
           cat > "$ASKPASS" <<'ASKPASS_EOF'
           #!/bin/sh
           case "$1" in
-            *Username*) printf '%s\\n' "$OPENLP_GITLAB_USERNAME" ;;
-            *Password*) printf '%s\\n' "$OPENLP_GITLAB_TOKEN" ;;
+            *Username*) printf '%s\n' "$OPENLP_GITLAB_USERNAME" ;;
+            *Password*) printf '%s\n' "$OPENLP_GITLAB_TOKEN" ;;
             *) exit 1 ;;
           esac
           ASKPASS_EOF
