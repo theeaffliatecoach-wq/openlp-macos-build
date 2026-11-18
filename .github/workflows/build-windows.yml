@@ -93,7 +93,7 @@ jobs:
           $actual = (git -C $packagingDir rev-parse HEAD).Trim()
           if ($actual -ne $env:PACKAGING_COMMIT) { throw "Packaging revision mismatch: $actual" }
           $builder = Join-Path $packagingDir "builders/windows-builder.py"
-          $config = Join-Path $packagingDir "windows/config-appveyor.ini"
+          $config = Join-Path $packagingDir "windows/config-gitlab.ini"
           if (!(Test-Path $builder)) { throw "Pinned packaging revision has no builders/windows-builder.py" }
           if (!(Test-Path $config)) { throw "Pinned packaging revision has no windows/config-appveyor.ini" }
           "PACKAGING_DIR=$packagingDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
@@ -143,7 +143,7 @@ jobs:
           $config = Join-Path $env:PACKAGING_DIR "windows/config-appveyor.ini"
           Push-Location $env:PACKAGING_DIR
           try {
-            python $builder --skip-update -c $config -b $env:OPENLP_DIR --portable
+            python $builder --skip-update --config $config --branch $env:OPENLP_DIR --portable
             if ($LASTEXITCODE -ne 0) { throw "Windows packaging builder failed with exit code $LASTEXITCODE" }
           }
           finally {
