@@ -153,14 +153,14 @@ jobs:
           4. If macOS asks whether to replace the existing application, confirm only after closing OpenLP.
           5. Keep the existing OpenLP user-data folder. Do not delete it or copy a database from this release over it.
 
-          These packages are **unsigned and not notarized**. macOS may display a security warning. Do not disable Gatekeeper globally. Signing and notarization are a later release milestone.
+          These packages passed build-time DMG checksum and executable-architecture validation, but have not yet had on-device macOS smoke testing. They are **unsigned and not notarized**. macOS may display a security warning. Do not disable Gatekeeper globally. Signing and notarization are a later release milestone.
 
           ### Build provenance
           - Build workflow run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN_ID
           - OpenLP source commit: `0a5cda2435521cd085d9015a66e247160a1439d5`
           - Packaging source commit: `d766d0c4e44b620b1bf59c3b02cc6e4af8953e2f`
 
-          **Important:** This update replaces the application bundle only. It is not an automated database migration or database backup. Existing Custom Slides data must remain in the user's OpenLP data directory.
+          **Important:** This update is intended to replace the application bundle only; it is not an automated database migration or database backup. Do not delete or overwrite the existing OpenLP user-data directory. Back it up before installing. Custom Slides database preservation must be confirmed in a real macOS smoke test before treating this as a production release.
           EOF
 
           gh release create "$RELEASE_TAG" release-assets/* \
