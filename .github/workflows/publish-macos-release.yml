@@ -1,0 +1,181 @@
+name: Publish macOS packages to GitHub Releases
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: "Successful Build unsigned macOS packages workflow run ID"
+        required: true
+        type: string
+      tag_name:
+        description: "Unique release tag, e.g. macos-unsigned-2026.11.18"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    name: Publish architecture-specific downloads
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Validate build run and release tag
+        id: validate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_RUN_ID: ${{ inputs.build_run_id }}
+          RELEASE_TAG: ${{ inputs.tag_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          [[ "$BUILD_RUN_ID" =~ ^[0-9]+$ ]] || {
+            echo "::error::Build run ID must be numeric."
+            exit 1
+          }
+          [[ "$RELEASE_TAG" =~ ^macos-unsigned-[0-9]{4}\.[0-9]{2}\.[0-9]{2}([.-][A-Za-z0-9.-]+)?$ ]] || {
+            echo "::error::Use a unique tag such as macos-unsigned-2026.11.18."
+            exit 1
+          }
+
+          RUN_JSON="$(gh run view "$BUILD_RUN_ID" --repo "$GITHUB_REPOSITORY" --json conclusion,headBranch,workflowName)"
+          echo "$RUN_JSON"
+          CONCLUSION="$(jq -r '.conclusion' <<< "$RUN_JSON")"
+          BRANCH="$(jq -r '.headBranch' <<< "$RUN_JSON")"
+          WORKFLOW="$(jq -r '.workflowName' <<< "$RUN_JSON")"
+
+          test "$CONCLUSION" = "success" || {
+            echo "::error::The selected build run did not succeed."
+            exit 1
+          }
+          test "$BRANCH" = "main" || {
+            echo "::error::Only builds from main can be published."
+            exit 1
+          }
+          test "$WORKFLOW" = "Build unsigned macOS packages" || {
+            echo "::error::The selected run is not the macOS package build workflow."
+            exit 1
+          }
+
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Release/tag $RELEASE_TAG already exists. Choose a new tag."
+            exit 1
+          fi
+
+          echo "build_run_id=$BUILD_RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Download Intel and Apple Silicon build artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_RUN_ID: ${{ steps.validate.outputs.build_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p downloads release-assets
+
+          gh run download "$BUILD_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name openlp-macos-x86_64-unsigned \
+            --dir downloads/intel
+
+          gh run download "$BUILD_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name openlp-macos-arm64-unsigned \
+            --dir downloads/apple-silicon
+
+          find downloads -type f -maxdepth 3 -print
+
+          copy_asset() {
+            local source_dir="$1"
+            local arch="$2"
+            local dmg appzip
+
+            dmg="$(find "$source_dir" -maxdepth 1 -type f -name '*.dmg' -print -quit)"
+            appzip="$(find "$source_dir" -maxdepth 1 -type f -name '*.app.zip' -print -quit)"
+
+            test -n "$dmg" || {
+              echo "::error::Missing DMG for $arch."
+              exit 1
+            }
+            test -n "$appzip" || {
+              echo "::error::Missing compressed app bundle for $arch."
+              exit 1
+            }
+
+            cp "$dmg" "release-assets/OpenLP-macOS-$arch-unsigned.dmg"
+            cp "$appzip" "release-assets/OpenLP-macOS-$arch-unsigned.app.zip"
+          }
+
+          copy_asset downloads/intel x86_64
+          copy_asset downloads/apple-silicon arm64
+
+          (
+            cd release-assets
+            shasum -a 256 ./*.dmg ./*.zip > SHA256SUMS.txt
+          )
+
+          echo "=== Release assets ==="
+          ls -lh release-assets
+          test "$(find release-assets -maxdepth 1 -type f | wc -l | tr -d ' ')" = "5"
+
+      - name: Publish unsigned prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.validate.outputs.tag_name }}
+          BUILD_RUN_ID: ${{ steps.validate.outputs.build_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > release-notes.md <<EOF
+          ## OpenLP macOS unsigned packages
+
+          These packages were built by GitHub Actions from the pinned OpenLP source revision.
+
+          **Choose the package matching the Mac's processor:**
+          - **Apple Silicon (arm64):** M-series Macs.
+          - **Intel (x86_64):** Intel-based Macs.
+
+          ### Downloads
+          - `OpenLP-macOS-arm64-unsigned.dmg` — recommended Apple Silicon installer disk image.
+          - `OpenLP-macOS-x86_64-unsigned.dmg` — recommended Intel installer disk image.
+          - The matching `.app.zip` files contain the application bundle in ZIP format.
+          - `SHA256SUMS.txt` contains SHA-256 checksums for all four packages.
+
+          ### Installation
+          1. Download the DMG matching the Mac's processor.
+          2. Open the DMG.
+          3. Drag `OpenLP.app` to the Applications folder.
+          4. If macOS asks whether to replace the existing application, confirm only after closing OpenLP.
+          5. Keep the existing OpenLP user-data folder. Do not delete it or copy a database from this release over it.
+
+          These packages are **unsigned and not notarized**. macOS may display a security warning. Do not disable Gatekeeper globally. Signing and notarization are a later release milestone.
+
+          ### Build provenance
+          - Build workflow run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN_ID
+          - OpenLP source commit: `0a5cda2435521cd085d9015a66e247160a1439d5`
+          - Packaging source commit: `d766d0c4e44b620b1bf59c3b02cc6e4af8953e2f`
+
+          **Important:** This update replaces the application bundle only. It is not an automated database migration or database backup. Existing Custom Slides data must remain in the user's OpenLP data directory.
+          EOF
+
+          gh release create "$RELEASE_TAG" release-assets/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "OpenLP macOS unsigned packages $RELEASE_TAG" \
+            --notes-file release-notes.md \
+            --prerelease
+
+      - name: Verify published release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.validate.outputs.tag_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --json url,isPrerelease,assets \
+            --jq '{url: .url, prerelease: .isPrerelease, assets: [.assets[].name]}'
