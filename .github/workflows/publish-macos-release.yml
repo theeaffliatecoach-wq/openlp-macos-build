@@ -42,11 +42,11 @@ jobs:
             exit 1
           }
 
-          RUN_JSON="$(gh run view "$BUILD_RUN_ID" --repo "$GITHUB_REPOSITORY" --json conclusion,headBranch,workflowName)"
+          RUN_JSON="$(gh run view "$BUILD_RUN_ID" --repo "$GITHUB_REPOSITORY" --json conclusion,headBranch,name)"
           echo "$RUN_JSON"
           CONCLUSION="$(jq -r '.conclusion' <<< "$RUN_JSON")"
           BRANCH="$(jq -r '.headBranch' <<< "$RUN_JSON")"
-          WORKFLOW="$(jq -r '.workflowName' <<< "$RUN_JSON")"
+          WORKFLOW="$(jq -r '.name' <<< "$RUN_JSON")"
 
           test "$CONCLUSION" = "success" || {
             echo "::error::The selected build run did not succeed."
@@ -88,7 +88,7 @@ jobs:
             --name openlp-macos-arm64-unsigned \
             --dir downloads/apple-silicon
 
-          find downloads -type f -maxdepth 3 -print
+          find downloads -maxdepth 3 -type f -print
 
           copy_asset() {
             local source_dir="$1"
