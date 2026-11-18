@@ -234,6 +234,56 @@ jobs:
             "Signing: not configured"
           ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
+      - name: Inventory Authenticode signatures
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $dist = Join-Path $env:OPENLP_DIR "dist"
+          $extractDir = Join-Path $env:RUNNER_TEMP "msi-validation"
+          $reportDir = Join-Path $env:RUNNER_TEMP "signature-inventory"
+          New-Item -ItemType Directory -Path $reportDir -Force | Out-Null
+
+          # Inspect the produced packages and every PE executable/library
+          # extracted from the MSI. This step does not modify or sign files.
+          $files = @(
+            Get-ChildItem -Path $dist,$extractDir -Recurse -File |
+              Where-Object { $_.Extension -in @(".exe", ".dll", ".msi") } |
+              Sort-Object -Property FullName -Unique
+          )
+          if ($files.Count -eq 0) { throw "No MSI, EXE, or DLL files were found for signature inventory." }
+
+          $inventory = foreach ($file in $files) {
+            $signature = Get-AuthenticodeSignature -FilePath $file.FullName
+            [PSCustomObject]@{
+              File = $file.Name
+              Extension = $file.Extension
+              SizeBytes = $file.Length
+              SignatureStatus = $signature.Status.ToString()
+              SignerSubject = if ($signature.SignerCertificate) { $signature.SignerCertificate.Subject } else { "" }
+              SignerThumbprint = if ($signature.SignerCertificate) { $signature.SignerCertificate.Thumbprint } else { "" }
+              StatusMessage = $signature.StatusMessage
+              Path = $file.FullName
+            }
+          }
+
+          $csvPath = Join-Path $reportDir "authenticode-inventory.csv"
+          $inventory | Export-Csv -Path $csvPath -NoTypeInformation -Encoding utf8
+          $inventory | Group-Object SignatureStatus | Sort-Object Name |
+            ForEach-Object { Write-Host ("{0}: {1} file(s)" -f $_.Name, $_.Count) }
+          Write-Host "Inventory contains $($inventory.Count) MSI/EXE/DLL file(s)."
+          Write-Host "Scope: MSI and PortableApps outer EXE in dist, plus EXE/DLL files extracted from the MSI."
+          "Authenticode inventory: $($inventory.Count) files" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          $inventory | Group-Object SignatureStatus | Sort-Object Name |
+            ForEach-Object { ("- {0}: {1}" -f $_.Name, $_.Count) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8 }
+
+      - name: Upload signature inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: openlp-windows-signature-inventory
+          path: ${{ runner.temp }}/signature-inventory/authenticode-inventory.csv
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Upload Windows packages
         uses: actions/upload-artifact@v4
         with:
