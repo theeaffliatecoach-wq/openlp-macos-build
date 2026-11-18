@@ -21,6 +21,8 @@ jobs:
     name: Publish Windows x64 downloads
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Validate build run and release tag
         id: validate
