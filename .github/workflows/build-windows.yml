@@ -46,17 +46,17 @@ jobs:
             throw "Missing OPENLP_GITLAB_USERNAME or OPENLP_GITLAB_TOKEN Actions secret."
           }
 
-          $askpass = Join-Path $env:RUNNER_TEMP "gitlab-askpass.sh"
+          $askpass = Join-Path $env:RUNNER_TEMP "gitlab-askpass.cmd"
           $askpassContent = @'
-          #!/usr/bin/env bash
-          case "$1" in
-            *Username*) printf '%s\n' "$OPENLP_GITLAB_USERNAME" ;;
-            *Password*) printf '%s\n' "$OPENLP_GITLAB_TOKEN" ;;
-            *) exit 1 ;;
-          esac
+          @echo off
+          echo %~1 | findstr /i "Username" >nul
+          if not errorlevel 1 (
+            echo %OPENLP_GITLAB_USERNAME%
+          ) else (
+            echo %OPENLP_GITLAB_TOKEN%
+          )
           '@
-          $askpassContent = $askpassContent.Replace([string][char]13 + [string][char]10, [string][char]10) + [string][char]10
-          [System.IO.File]::WriteAllText($askpass, $askpassContent, [System.Text.UTF8Encoding]::new($false))
+          Set-Content -Path $askpass -Value $askpassContent -Encoding ascii
           $env:GIT_ASKPASS = $askpass
           $env:GIT_TERMINAL_PROMPT = "0"
 
