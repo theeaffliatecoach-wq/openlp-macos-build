@@ -1,0 +1,70 @@
+name: Correct macOS release notes
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Existing macOS prerelease tag to update"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  update-notes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Replace release description
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag_name }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          gh release view "$RELEASE_TAG" --repo "$REPOSITORY" >/dev/null
+
+          cat > release-notes.md <<'EOF'
+          ## OpenLP macOS unsigned packages
+
+          These packages were built by GitHub Actions from the pinned OpenLP source revision.
+
+          ### Choose the correct Mac download
+
+          - **Apple Silicon (arm64):** M-series Macs (M1, M2, M3, M4 and later).
+          - **Intel (x86_64):** Intel-based Macs.
+
+          ### Downloads
+
+          - OpenLP-macOS-arm64-unsigned.dmg — recommended Apple Silicon disk image.
+          - OpenLP-macOS-x86_64-unsigned.dmg — recommended Intel disk image.
+          - The matching .app.zip files contain the application bundle in ZIP format.
+          - SHA256SUMS.txt contains SHA-256 checksums for all four packages.
+
+          ### Installation
+
+          1. Download the DMG matching the Mac's processor.
+          2. Open the downloaded DMG.
+          3. Drag OpenLP.app into the Applications folder.
+          4. If macOS asks to replace an existing application, close OpenLP first and then confirm.
+          5. Keep the existing OpenLP user-data folder. Do not delete it or overwrite its database.
+
+          ### Important compatibility and security information
+
+          These packages passed build-time DMG checksum and executable-architecture validation. They have not yet had on-device macOS smoke testing. They are unsigned and not notarized, so macOS may display a security warning. Do not disable Gatekeeper globally.
+
+          This update is intended to replace the application bundle only. It is not an automated database migration or database backup. Back up existing OpenLP user data before installing. Preservation of the Custom Slides database must be confirmed in a real macOS smoke test before this is treated as a production release.
+
+          ### Build provenance
+
+          - Build workflow: https://github.com/theeaffliatecoach-wq/openlp-macos-build/actions/runs/44242973972
+          - OpenLP source commit: 0a5cda2435521cd085d9015a66e247160a1439d5
+          - Packaging source commit: d766d0c4e44b620b1bf59c3b02cc6e4af8953e2f
+          EOF
+
+          gh release edit "$RELEASE_TAG" --repo "$REPOSITORY" --notes-file release-notes.md
+
+          gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json url,isPrerelease,body,assets \
+            --jq '{url: .url, prerelease: .isPrerelease, body: .body, assets: [.assets[].name]}'
