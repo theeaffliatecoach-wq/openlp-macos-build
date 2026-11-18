@@ -143,19 +143,22 @@ jobs:
           path = Path(sys.argv[1])
           source = path.read_text()
           marker = "from pathlib import Path\n"
+          codec_import = "import encodings.utf_16_be  # Preload the UTF-16 codec used by mac_alias before pip installs its import hook.\n"
           qt_import = "from PyQt5.QtCore import QCoreApplication  # Preload before pip installs its import hook.\n"
           dmg_import = "import dmgbuild  # Preload before pip installs its import hook.\n"
           dmg_main_import = "import dmgbuild.__main__  # Preload the runpy entry point before pip installs its import hook.\n"
           if marker not in source:
               raise SystemExit("Expected macOS builder import block was not found; refusing an unsafe patch.")
+          if codec_import not in source:
+              source = source.replace(marker, marker + codec_import, 1)
           if qt_import not in source:
-              source = source.replace(marker, marker + qt_import, 1)
+              source = source.replace(marker + codec_import, marker + codec_import + qt_import, 1)
           if dmg_import not in source:
               source = source.replace(qt_import, qt_import + dmg_import, 1)
           if dmg_main_import not in source:
               source = source.replace(dmg_import, dmg_import + dmg_main_import, 1)
           path.write_text(source)
-          print("Ensured PyQt5.QtCore, dmgbuild, and dmgbuild.__main__ are preloaded before pip installs its import hook.")
+          print("Ensured the UTF-16 codec, PyQt5.QtCore, dmgbuild, and dmgbuild.__main__ are preloaded before pip installs its import hook.")
           PY
 
           # dmgbuild 2.0.0 no longer accepts the legacy UDBZ format. Keep the
