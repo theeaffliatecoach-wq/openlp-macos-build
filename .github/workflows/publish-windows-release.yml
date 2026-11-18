@@ -78,13 +78,13 @@ jobs:
           These packages were built by GitHub Actions from the pinned OpenLP source revision.
 
           ### Downloads
-          - `OpenLP-3.1.2.dev261+0a5cda243-x64.msi` — standard Windows Installer package.
-          - `OpenLPPortable_3.1.2.261-x64.paf.exe` — PortableApps package.
+          - `OpenLP-3.1.2.dev262+31fba3db6-x64.msi` — standard Windows Installer package (unsigned; installation not verified because Smart App Control blocked it on the test PC).
+          - `OpenLPPortable_3.1.2.262-x64.paf.exe` — PortableApps package (launch smoke-tested successfully).
           - `SHA256SUMS.txt` — SHA-256 checksums.
 
-          **Target:** Windows 10 and Windows 11, 64-bit. Runtime smoke testing on physical Windows 10/11 systems is still required.
+          **Target:** Windows 10 and Windows 11, 64-bit. The PortableApps package launched successfully in a test environment. The MSI was built and checksum-verified, but installation was not verified: Windows Smart App Control blocked the unsigned installer on the test PC.
 
-          **Security:** These packages are unsigned and are not code-signed. Windows SmartScreen or other security software may show a warning. Do not bypass security controls unless you have verified the download and its checksum.
+          **Security:** These packages are unsigned and are not code-signed. Windows SmartScreen, Smart App Control, or other security software may warn or block execution. Do not disable or bypass Windows security controls to run these packages. The PortableApps launch test does not establish that the MSI can be installed on systems enforcing Smart App Control.
 
           ### Installation
           1. Back up your existing OpenLP user-data directory before upgrading.
@@ -99,7 +99,7 @@ jobs:
           EOF
           printf '%s\n' \
             "- Build workflow run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN_ID" \
-            "- OpenLP source commit: 0a5cda2435521cd085d9015a66e247160a1439d5" \
+            "- OpenLP source commit: 31fba3db6659aa8259e916759c74f9a02044365a" \
             "- Packaging source commit: d766d0c4e44b620b1bf59c3b02cc6e4af8953e2f" \
             >> release-notes.md
           gh release create "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --title "OpenLP Windows unsigned packages $RELEASE_TAG" --notes-file release-notes.md --prerelease
