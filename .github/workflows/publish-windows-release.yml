@@ -72,7 +72,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat > release-notes.md <<EOF
+          cat > release-notes.md <<'EOF'
           ## OpenLP Windows 10/11 x64 unsigned packages
 
           These packages were built by GitHub Actions from the pinned OpenLP source revision.
@@ -96,10 +96,12 @@ jobs:
           The PortableApps package is a separate portable distribution. Use it in its own folder and do not point it at your production data until tested.
 
           ### Build provenance
-          - Build workflow run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN_ID
-          - OpenLP source commit: `0a5cda2435521cd085d9015a66e247160a1439d5`
-          - Packaging source commit: `d766d0c4e44b620b1bf59c3b02cc6e4af8953e2f`
           EOF
+          printf '%s\n' \
+            "- Build workflow run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN_ID" \
+            "- OpenLP source commit: `0a5cda2435521cd085d9015a66e247160a1439d5`" \
+            "- Packaging source commit: `d766d0c4e44b620b1bf59c3b02cc6e4af8953e2f`" \
+            >> release-notes.md
           gh release create "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --title "OpenLP Windows unsigned packages $RELEASE_TAG" --notes-file release-notes.md --prerelease
 
       - name: Verify published release
