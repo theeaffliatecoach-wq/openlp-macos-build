@@ -54,7 +54,9 @@ jobs:
             *Password*) printf '%s\n' "$OPENLP_GITLAB_TOKEN" ;;
             *) exit 1 ;;
           esac
-          '@ | Set-Content -Path $askpass -Encoding ascii
+          '@
+          $askpassContent = $askpassContent.Replace([string][char]13 + [string][char]10, [string][char]10) + [string][char]10
+          [System.IO.File]::WriteAllText($askpass, $askpassContent, [System.Text.UTF8Encoding]::new($false))
           $env:GIT_ASKPASS = $askpass
           $env:GIT_TERMINAL_PROMPT = "0"
 
