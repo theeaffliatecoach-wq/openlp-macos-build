@@ -96,8 +96,6 @@ jobs:
           if (!(Test-Path $config)) { throw "Pinned packaging revision has no windows/config-appveyor.ini" }
           "PACKAGING_DIR=$packagingDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "Packaging source revision: $actual"
-          Write-Host "Windows builder options:"
-          python $builder --help
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -112,7 +110,7 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           python -m pip install --upgrade pip
-          python -m pip install sqlalchemy alembic platformdirs chardet beautifulsoup4 lxml Mako mysql-connector-python pytest mock websockets waitress six requests QtAwesome PySide6 QDarkStyle flask-cors pytest-qt pyenchant pysword qrcode flask packaging pymediainfo PyMuPDF python-vlc pyodbc pypiwin32
+          python -m pip install sqlalchemy alembic platformdirs chardet beautifulsoup4 lxml Mako mysql-connector-python pytest mock websockets waitress six requests QtAwesome PySide6 QDarkStyle flask-cors pytest-qt pyenchant pysword qrcode flask packaging pymediainfo PyMuPDF python-vlc pyodbc pywin32
           $pyicuWheel = "https://github.com/cgohlke/pyicu-build/releases/download/v2.14/PyICU-2.14-cp312-cp312-win_amd64.whl"
           python -m pip install $pyicuWheel
           python -m pip install pyinstaller
