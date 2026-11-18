@@ -142,9 +142,20 @@ jobs:
           if (!(Test-Path $portableArchive) -or (Get-Item $portableArchive).Length -lt 100000) {
             throw "Portable packaging support archive is missing or unexpectedly small."
           }
-          7z x $portableArchive "-o$env:RUNNER_TEMP\portable-setup" -y
+          # The pinned packaging config resolves PortableApps tools from
+          # RUNNER_TEMP\PortableApps.comLauncher and RUNNER_TEMP\PortableApps.comInstaller.
+          # Extract at RUNNER_TEMP (not in a nested portable-setup directory).
+          7z x $portableArchive "-o$env:RUNNER_TEMP" -y
           if ($LASTEXITCODE -ne 0) { throw "Extracting portable packaging support failed" }
-          Get-ChildItem "$env:RUNNER_TEMP\portable-setup" -Recurse | Select-Object -First 40 FullName
+
+          $launcher = Join-Path $env:RUNNER_TEMP "PortableApps.comLauncher\PortableApps.comLauncherGenerator.exe"
+          $installer = Join-Path $env:RUNNER_TEMP "PortableApps.comInstaller\PortableApps.comInstaller.exe"
+          if (!(Test-Path $launcher)) { throw "PortableApps launcher generator not found at configured path: $launcher" }
+          if (!(Test-Path $installer)) { throw "PortableApps installer not found at configured path: $installer" }
+          Write-Host "PortableApps launcher: $launcher"
+          Write-Host "PortableApps installer: $installer"
+          Get-ChildItem "$env:RUNNER_TEMP\PortableApps.comLauncher","$env:RUNNER_TEMP\PortableApps.comInstaller" -Recurse -File |
+            Select-Object FullName, Length
 
       - name: Build Windows installer and portable package
         shell: pwsh
