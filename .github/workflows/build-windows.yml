@@ -95,7 +95,7 @@ jobs:
           $builder = Join-Path $packagingDir "builders/windows-builder.py"
           $config = Join-Path $packagingDir "windows/config-gitlab.ini"
           if (!(Test-Path $builder)) { throw "Pinned packaging revision has no builders/windows-builder.py" }
-          if (!(Test-Path $config)) { throw "Pinned packaging revision has no windows/config-appveyor.ini" }
+          if (!(Test-Path $config)) { throw "Pinned packaging revision has no windows/config-gitlab.ini" }
           "PACKAGING_DIR=$packagingDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "Packaging source revision: $actual"
 
@@ -140,7 +140,7 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $builder = Join-Path $env:PACKAGING_DIR "builders/windows-builder.py"
-          $config = Join-Path $env:PACKAGING_DIR "windows/config-appveyor.ini"
+          $config = Join-Path $env:PACKAGING_DIR "windows/config-gitlab.ini"
           Push-Location $env:PACKAGING_DIR
           try {
             python $builder --skip-update --config $config --branch $env:OPENLP_DIR --portable
