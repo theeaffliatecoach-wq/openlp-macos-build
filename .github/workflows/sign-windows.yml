@@ -1,0 +1,142 @@
+name: Sign Windows packages (SignPath)
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: "Successful Windows build workflow run ID containing openlp-windows-x64-unsigned"
+        required: true
+        type: string
+
+# This workflow is deliberately separate from build-windows.yml and the release
+# workflow. It does not publish a release or alter existing unsigned artifacts.
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  sign:
+    name: Submit Windows packages to SignPath
+    runs-on: windows-2022
+    timeout-minutes: 60
+    # Keep signing disabled until SignPath has approved the project and all
+    # repository variables/secrets below have been configured and reviewed.
+    if: vars.SIGNPATH_ENABLED == 'true'
+
+    steps:
+      - name: Validate SignPath configuration
+        shell: pwsh
+        env:
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          SIGNPATH_SIGNING_POLICY_SLUG: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          SIGNPATH_ARTIFACT_CONFIGURATION_SLUG: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $required = @(
+            "SIGNPATH_API_TOKEN",
+            "SIGNPATH_ORGANIZATION_ID",
+            "SIGNPATH_PROJECT_SLUG",
+            "SIGNPATH_SIGNING_POLICY_SLUG",
+            "SIGNPATH_ARTIFACT_CONFIGURATION_SLUG"
+          )
+          foreach ($name in $required) {
+            $value = [Environment]::GetEnvironmentVariable($name)
+            if ([string]::IsNullOrWhiteSpace($value)) {
+              throw "Missing SignPath configuration: $name. Do not enable SIGNPATH_ENABLED until SignPath approval and project configuration are complete."
+            }
+          }
+          Write-Host "Required SignPath configuration is present."
+
+      - name: Download unsigned Windows build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: openlp-windows-x64-unsigned
+          path: unsigned-packages
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Validate downloaded packages
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $files = @(Get-ChildItem unsigned-packages -File)
+          $msi = @($files | Where-Object Extension -eq ".msi")
+          $exe = @($files | Where-Object Extension -eq ".exe")
+          $checksums = @($files | Where-Object Name -eq "SHA256SUMS.txt")
+          if ($msi.Count -ne 1) { throw "Expected exactly one MSI; found $($msi.Count)." }
+          if ($exe.Count -ne 1) { throw "Expected exactly one PortableApps EXE; found $($exe.Count)." }
+          if ($checksums.Count -ne 1) { throw "Expected SHA256SUMS.txt." }
+          Get-ChildItem unsigned-packages -File | Get-FileHash -Algorithm SHA256 |
+            Format-Table Path, Hash -AutoSize
+
+      - name: Upload unsigned input for SignPath
+        id: unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: openlp-windows-signpath-input
+          path: unsigned-packages/*
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Submit signing request to SignPath
+        id: signpath
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: "1800"
+          output-artifact-directory: signed-packages
+
+      - name: Verify signed package signatures
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $files = @(Get-ChildItem signed-packages -Recurse -File |
+            Where-Object { $_.Extension -in @(".msi", ".exe", ".dll") })
+          if ($files.Count -eq 0) { throw "SignPath returned no MSI, EXE, or DLL files." }
+
+          $inventory = foreach ($file in $files) {
+            $signature = Get-AuthenticodeSignature -FilePath $file.FullName
+            [PSCustomObject]@{
+              File = $file.Name
+              Status = $signature.Status.ToString()
+              Signer = if ($signature.SignerCertificate) { $signature.SignerCertificate.Subject } else { "" }
+              Thumbprint = if ($signature.SignerCertificate) { $signature.SignerCertificate.Thumbprint } else { "" }
+              Path = $file.FullName
+            }
+          }
+          $inventory | Format-Table -AutoSize
+          $inventory | Export-Csv signed-packages/authenticode-signed-inventory.csv -NoTypeInformation -Encoding utf8
+
+          $invalid = @($inventory | Where-Object Status -ne "Valid")
+          if ($invalid.Count -gt 0) {
+            throw "$($invalid.Count) file(s) do not have a valid Authenticode signature. Signed artifacts will not be uploaded."
+          }
+
+          "All inspected MSI/EXE/DLL files have valid Authenticode signatures." |
+            Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: Upload signed Windows packages (not published)
+        uses: actions/upload-artifact@v4
+        with:
+          name: openlp-windows-x64-signed
+          path: signed-packages/*
+          if-no-files-found: error
+          retention-days: 30
+
+  signing-disabled:
+    name: Signing not enabled
+    runs-on: ubuntu-latest
+    if: vars.SIGNPATH_ENABLED != 'true'
+    steps:
+      - name: Explain required setup
+        run: |
+          echo "Signing was intentionally not run."
+          echo "Wait for SignPath Foundation approval, configure the required repository variables and SIGNPATH_API_TOKEN secret, review the artifact configuration, then set SIGNPATH_ENABLED=true."
