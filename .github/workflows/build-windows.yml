@@ -47,7 +47,7 @@ jobs:
           }
 
           $askpass = Join-Path $env:RUNNER_TEMP "gitlab-askpass.sh"
-          @'
+          $askpassContent = @'
           #!/usr/bin/env bash
           case "$1" in
             *Username*) printf '%s\n' "$OPENLP_GITLAB_USERNAME" ;;
