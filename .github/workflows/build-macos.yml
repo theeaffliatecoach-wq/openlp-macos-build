@@ -247,8 +247,8 @@ jobs:
           fi
 
           echo "=== Packaging output ==="
-          find dist -maxdepth 3 \( -name '*.dmg' -o -name '*.app' \) -print
-          compgen -G 'dist/*.dmg' >/dev/null || {
+          find "$OPENLP_DIR/dist" -maxdepth 3 \( -name '*.dmg' -o -name '*.app' \) -print
+          compgen -G "$OPENLP_DIR/dist/*.dmg" >/dev/null || {
             echo "::error::The macOS builder did not produce a DMG in dist/."
             exit 1
           }
@@ -257,7 +257,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cd "$PACKAGING_DIR"
+          cd "$OPENLP_DIR"
           mkdir -p "$RUNNER_TEMP/package-validation"
 
           shopt -s nullglob
