@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#182536">
-  <meta name="description" content="Download the architecture-specific unsigned macOS builds of OpenLP.">
-  <title>OpenLP for macOS — Downloads</title>
+  <meta name="description" content="Download unsigned OpenLP preview builds for Windows and macOS.">
+  <title>OpenLP Downloads — Windows and macOS</title>
   <style>
     :root {
       color-scheme: light;
@@ -72,9 +72,9 @@
 <body>
   <header>
     <div class="wrap">
-      <div class="eyebrow">OpenLP · macOS downloads</div>
-      <h1>OpenLP for macOS</h1>
-      <p>Choose the build that matches your Mac's processor. These packages are from the same OpenLP source revision and are provided as unsigned preview builds.</p>
+      <div class="eyebrow">OpenLP · preview downloads</div>
+      <h1>OpenLP Downloads</h1>
+      <p>Choose the package for your operating system and processor. These Windows and macOS builds are unsigned preview packages.</p>
     </div>
   </header>
 
@@ -85,6 +85,30 @@
       <p>Neither package has yet been smoke-tested on a physical Intel or Apple Silicon Mac. Do not disable Gatekeeper globally or bypass macOS security protections to install this build. For general/public production use, wait for a signed and notarized release.</p>
     </div>
 
+    <section>
+      <h2>Windows 10 and 11 · 64-bit</h2>
+      <p>Choose the standard installer for a conventional Windows installation, or the PortableApps package for a separate portable copy.</p>
+      <div class="grid">
+        <article class="card">
+          <h2>Windows Installer</h2>
+          <span class="chip">x64 · MSI</span>
+          <p>Standard Windows installation. Back up your OpenLP user data before upgrading.</p>
+          <a class="button" href="https://github.com/theeaffliatecoach-wq/openlp-macos-build/releases/download/windows-unsigned-2026.11.18/OpenLP-3.1.2.dev261%2B0a5cda243-x64.msi">Download Windows Installer</a>
+        </article>
+        <article class="card">
+          <h2>PortableApps</h2>
+          <span class="chip">x64 · Portable</span>
+          <p>A separate portable distribution. Keep it in its own folder and test it without pointing it at production data.</p>
+          <a class="button" href="https://github.com/theeaffliatecoach-wq/openlp-macos-build/releases/download/windows-unsigned-2026.11.18/OpenLPPortable_3.1.2.261-x64.paf.exe">Download PortableApps package</a>
+        </article>
+      </div>
+      <p class="fine"><a href="https://github.com/theeaffliatecoach-wq/openlp-macos-build/releases/download/windows-unsigned-2026.11.18/SHA256SUMS.txt">Windows SHA-256 checksums</a> · <a href="https://github.com/theeaffliatecoach-wq/openlp-macos-build/releases/tag/windows-unsigned-2026.11.18">Windows release notes and assets</a></p>
+      <p class="fine">These packages are unsigned. Windows SmartScreen or other security software may display a warning. Runtime installation and launch testing on physical Windows 10/11 systems is still required.</p>
+    </section>
+
+    <section>
+      <h2>macOS downloads</h2>
+      <p>Choose the build that matches your Mac's processor.</p>
     <div class="grid">
       <article class="card">
         <h2>Apple Silicon</h2>
@@ -104,7 +128,7 @@
     </div>
 
     <section>
-      <h2>Installation</h2>
+      <h2>macOS installation</h2>
       <ol class="steps">
         <li>Confirm your Mac's processor type, then download the matching DMG above.</li>
         <li>Open the downloaded DMG file.</li>
@@ -128,7 +152,7 @@
   </main>
 
   <footer>
-    <div class="wrap">OpenLP macOS preview distribution · <a href="https://github.com/theeaffliatecoach-wq/openlp-macos-build">Build repository</a></div>
+    <div class="wrap">OpenLP preview distribution · <a href="https://github.com/theeaffliatecoach-wq/openlp-macos-build">Build repository</a></div>
   </footer>
 </body>
 </html>
