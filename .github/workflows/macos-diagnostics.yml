@@ -2,9 +2,6 @@ name: macOS runner diagnostics
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 permissions:
   contents: read
