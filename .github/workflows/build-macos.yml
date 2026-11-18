@@ -158,6 +158,25 @@ jobs:
           print("Ensured PyQt5.QtCore, dmgbuild, and dmgbuild.__main__ are preloaded before pip installs its import hook.")
           PY
 
+          # dmgbuild 2.0.0 no longer accepts the legacy UDBZ format. Keep the
+          # temporary packaging checkout compatible by using the supported
+          # UDZO zlib-compressed disk image format.
+          python3 - "$PACKAGING_DIR/macos/settings.py" <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path(sys.argv[1])
+          source = path.read_text()
+          if "UDBZ" in source:
+              source = source.replace("UDBZ", "UDZO")
+              path.write_text(source)
+              print("Replaced unsupported UDBZ DMG format with supported UDZO.")
+          elif "UDZO" in source:
+              print("DMG settings already use supported UDZO format.")
+          else:
+              raise SystemExit("Expected UDBZ/UDZO format setting was not found; refusing an unsafe patch.")
+          PY
+
           echo "PACKAGING_DIR=$PACKAGING_DIR" >> "$GITHUB_ENV"
           echo "Packaging source: $ACTUAL"
           grep -n -A 3 -B 1 "cmd = \['pyinstaller'" "$PACKAGING_DIR/builders/builder.py"
