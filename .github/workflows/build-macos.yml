@@ -40,6 +40,11 @@ jobs:
       PYTHON_VERSION: "3.13.2"
 
     steps:
+      - name: Check out workflow repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
       - name: Verify runner architecture
         shell: bash
         run: |
