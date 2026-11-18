@@ -1,0 +1,109 @@
+name: Publish Windows packages to GitHub Releases
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: "Successful Windows package build workflow run ID"
+        required: true
+        type: string
+      tag_name:
+        description: "Unique release tag, e.g. windows-unsigned-2026.11.18"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    name: Publish Windows x64 downloads
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Validate build run and release tag
+        id: validate
+        env:
+          BUILD_RUN_ID: ${{ inputs.build_run_id }}
+          RELEASE_TAG: ${{ inputs.tag_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$BUILD_RUN_ID" =~ ^[0-9]+$ ]] || { echo "::error::Build run ID must be numeric."; exit 1; }
+          [[ "$RELEASE_TAG" =~ ^windows-unsigned-[0-9]{4}\.[0-9]{2}\.[0-9]{2}([.-][A-Za-z0-9.-]+)?$ ]] || { echo "::error::Use a tag such as windows-unsigned-2026.11.18."; exit 1; }
+          RUN_JSON="$(gh run view "$BUILD_RUN_ID" --repo "$GITHUB_REPOSITORY" --json conclusion,headBranch,name)"
+          echo "$RUN_JSON"
+          test "$(jq -r '.conclusion' <<< "$RUN_JSON")" = "success" || { echo "::error::Selected build did not succeed."; exit 1; }
+          test "$(jq -r '.headBranch' <<< "$RUN_JSON")" = "main" || { echo "::error::Only builds from main can be published."; exit 1; }
+          test "$(jq -r '.name' <<< "$RUN_JSON")" = "Build Windows packages" || { echo "::error::Selected run is not the Windows package build workflow."; exit 1; }
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then echo "::error::Release/tag already exists."; exit 1; fi
+          echo "build_run_id=$BUILD_RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Download and verify Windows packages
+        env:
+          BUILD_RUN_ID: ${{ steps.validate.outputs.build_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p downloads release-assets
+          gh run download "$BUILD_RUN_ID" --repo "$GITHUB_REPOSITORY" --name openlp-windows-x64-unsigned --dir downloads
+          find downloads -maxdepth 2 -type f -print
+          msi="$(find downloads -maxdepth 2 -type f -name '*.msi' -print -quit)"
+          portable="$(find downloads -maxdepth 2 -type f -name '*.paf.exe' -print -quit)"
+          sums="$(find downloads -maxdepth 2 -type f -name 'SHA256SUMS.txt' -print -quit)"
+          test -n "$msi" || { echo "::error::Windows MSI missing."; exit 1; }
+          test -n "$portable" || { echo "::error::PortableApps package missing."; exit 1; }
+          test -n "$sums" || { echo "::error::SHA256SUMS.txt missing."; exit 1; }
+          cp "$msi" release-assets/
+          cp "$portable" release-assets/
+          cp "$sums" release-assets/
+          (cd release-assets && sha256sum -c SHA256SUMS.txt)
+          test "$(find release-assets -maxdepth 1 -type f | wc -l | tr -d ' ')" = "3"
+          ls -lh release-assets
+
+      - name: Publish unsigned Windows prerelease
+        env:
+          RELEASE_TAG: ${{ steps.validate.outputs.tag_name }}
+          BUILD_RUN_ID: ${{ steps.validate.outputs.build_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > release-notes.md <<EOF
+          ## OpenLP Windows 10/11 x64 unsigned packages
+
+          These packages were built by GitHub Actions from the pinned OpenLP source revision.
+
+          ### Downloads
+          - \\`OpenLP-3.1.2.dev261+0a5cda243-x64.msi\\` — standard Windows Installer package.
+          - \\`OpenLPPortable_3.1.2.261-x64.paf.exe\\` — PortableApps package.
+          - \\`SHA256SUMS.txt\\` — SHA-256 checksums.
+
+          **Target:** Windows 10 and Windows 11, 64-bit. Runtime smoke testing on physical Windows 10/11 systems is still required.
+
+          **Security:** These packages are unsigned and are not code-signed. Windows SmartScreen or other security software may show a warning. Do not bypass security controls unless you have verified the download and its checksum.
+
+          ### Installation
+          1. Back up your existing OpenLP user-data directory before upgrading.
+          2. Download the MSI and verify it using the supplied SHA-256 checksum.
+          3. Close OpenLP, run the MSI, and follow the installer.
+          4. Keep your existing OpenLP user-data directory. Do not replace it with files from this package.
+          5. Launch OpenLP and verify your songs, themes, media, and Custom Slides before using it live.
+
+          The PortableApps package is a separate portable distribution. Use it in its own folder and do not point it at your production data until tested.
+
+          ### Build provenance
+          - Build workflow run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN_ID
+          - OpenLP source commit: \\`0a5cda2435521cd085d9015a66e247160a1439d5\\`
+          - Packaging source commit: \\`d766d0c4e44b620b1bf59c3b02cc6e4af8953e2f\\`
+          EOF
+          gh release create "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --title "OpenLP Windows unsigned packages $RELEASE_TAG" --notes-file release-notes.md --prerelease
+
+      - name: Verify published release
+        env:
+          RELEASE_TAG: ${{ steps.validate.outputs.tag_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json url,isPrerelease,assets --jq '{url: .url, prerelease: .isPrerelease, assets: [.assets[].name]}'
