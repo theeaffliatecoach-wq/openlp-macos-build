@@ -99,8 +99,8 @@ jobs:
           EOF
           printf '%s\n' \
             "- Build workflow run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN_ID" \
-            "- OpenLP source commit: `0a5cda2435521cd085d9015a66e247160a1439d5`" \
-            "- Packaging source commit: `d766d0c4e44b620b1bf59c3b02cc6e4af8953e2f`" \
+            "- OpenLP source commit: 0a5cda2435521cd085d9015a66e247160a1439d5" \
+            "- Packaging source commit: d766d0c4e44b620b1bf59c3b02cc6e4af8953e2f" \
             >> release-notes.md
           gh release create "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --title "OpenLP Windows unsigned packages $RELEASE_TAG" --notes-file release-notes.md --prerelease
 
