@@ -69,6 +69,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Fetching the pinned OpenLP source failed" }
           git -C $openlpDir checkout --detach FETCH_HEAD
           if ($LASTEXITCODE -ne 0) { throw "Checking out the pinned OpenLP source failed" }
+
+          # The packaging builder calls git describe --tags to generate
+          # OpenLP's version file. A depth-1 checkout without tags cannot do that.
+          git -C $openlpDir fetch --unshallow --tags origin
+          if ($LASTEXITCODE -ne 0) { throw "Fetching OpenLP history and tags failed" }
+          $gitVersion = (git -C $openlpDir describe --tags).Trim()
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($gitVersion)) {
+            throw "Unable to determine OpenLP version from repository tags."
+          }
+          Write-Host "OpenLP Git version: $gitVersion"
+
           $actual = (git -C $openlpDir rev-parse HEAD).Trim()
           if ($actual -ne $env:OPENLP_COMMIT) { throw "OpenLP source revision mismatch: $actual" }
           "OPENLP_DIR=$openlpDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
