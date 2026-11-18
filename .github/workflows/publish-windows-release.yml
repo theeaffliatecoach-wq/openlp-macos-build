@@ -76,9 +76,9 @@ jobs:
           These packages were built by GitHub Actions from the pinned OpenLP source revision.
 
           ### Downloads
-          - \\`OpenLP-3.1.2.dev261+0a5cda243-x64.msi\\` — standard Windows Installer package.
-          - \\`OpenLPPortable_3.1.2.261-x64.paf.exe\\` — PortableApps package.
-          - \\`SHA256SUMS.txt\\` — SHA-256 checksums.
+          - `OpenLP-3.1.2.dev261+0a5cda243-x64.msi` — standard Windows Installer package.
+          - `OpenLPPortable_3.1.2.261-x64.paf.exe` — PortableApps package.
+          - `SHA256SUMS.txt` — SHA-256 checksums.
 
           **Target:** Windows 10 and Windows 11, 64-bit. Runtime smoke testing on physical Windows 10/11 systems is still required.
 
@@ -95,8 +95,8 @@ jobs:
 
           ### Build provenance
           - Build workflow run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN_ID
-          - OpenLP source commit: \\`0a5cda2435521cd085d9015a66e247160a1439d5\\`
-          - Packaging source commit: \\`d766d0c4e44b620b1bf59c3b02cc6e4af8953e2f\\`
+          - OpenLP source commit: `0a5cda2435521cd085d9015a66e247160a1439d5`
+          - Packaging source commit: `d766d0c4e44b620b1bf59c3b02cc6e4af8953e2f`
           EOF
           gh release create "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --title "OpenLP Windows unsigned packages $RELEASE_TAG" --notes-file release-notes.md --prerelease
 
